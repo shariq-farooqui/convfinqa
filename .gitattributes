@@ -1,0 +1,8 @@
+# Default behavior to automatically normalize line endings
+* text=auto
+
+# Text files that should have specific line endings
+*.py text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
