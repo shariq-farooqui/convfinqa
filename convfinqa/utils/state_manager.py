@@ -19,7 +19,7 @@ class StateManager:
             output_path: Path to store the state file
             force_restart: Whether to ignore existing state and start fresh
         """
-        self.output_path = Path(output_path)
+        self.output_path = output_path
         self.state_path = self.output_path.with_suffix(".state.json")
         self.processed_ids: set[str] = set()
         self.current_batch = 0

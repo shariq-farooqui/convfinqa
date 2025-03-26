@@ -42,6 +42,9 @@ def evaluate(
     force_restart: bool = typer.Option(
         False, help="Force restart from beginning, ignoring any saved state"
     ),
+    overwrite: bool = typer.Option(
+        True, help="Whether to run API calls again or just recalculate metrics"
+    ),
 ):
     """Evaluate LLM performance on the ConvFinQA dataset."""
     if not os.getenv("OPENAI_API_KEY"):
@@ -72,6 +75,7 @@ def evaluate(
         batch_size=batch_size,
         max_concurrency=max_concurrency,
         force_restart=force_restart,
+        overwrite=overwrite,
     )
     typer.echo(f"Evaluation complete. Results saved to {output_path}")
 

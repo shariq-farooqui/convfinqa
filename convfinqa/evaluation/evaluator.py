@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import numpy as np
@@ -133,7 +134,8 @@ class DatasetEvaluator:
         batch_size: int = 50,
         max_concurrency: int = 5,
         force_restart: bool = False,
-    ):
+        overwrite: bool = True,
+    ) -> None:
         """Run evaluation on the ConvFinQA Dataset.
 
         Args:
@@ -141,7 +143,15 @@ class DatasetEvaluator:
             batch_size: Number of samples to process before saving state
             max_concurrency: Maximum number of concurrent API requests
             force_restart: Whether to ignore existing state and start fresh
+            overwrite: Whether to run the API calls again or use existing results
         """
+        output_path = Path(output_path)
+        # Check if we are recalculating metrics using results from a previous run
+        if not overwrite and output_path.exists():
+            logger.debug("Using existing results file for metrics calculation")
+            self._load_results_and_calculate_metrics(output_path)
+            return
+
         # Setup checkpoint state
         state_manager = StateManager(output_path, force_restart)
 
@@ -151,7 +161,7 @@ class DatasetEvaluator:
         )
 
         # Save final results
-        self._save_results(Path(output_path))
+        self._save_results(output_path)
 
         # Calculate and display metrics
         metrics = self._calculate_metrics()
@@ -214,14 +224,105 @@ class DatasetEvaluator:
             if s.answer_type in ["clean_percentage", "numeric"]
         ]
 
-        if numeric_samples:
-            true_values, pred_values = self._get_numeric_pairs(numeric_samples)
+        # Add debug information about sample types
+        answer_type_counts = {}
+        for s in samples_with_predictions:
+            answer_type_counts[s.answer_type] = (
+                answer_type_counts.get(s.answer_type, 0) + 1
+            )
 
-            # Calculate error metrics
-            metrics["mae"] = self._calculate_mae(true_values, pred_values)
-            metrics["rmse"] = self._calculate_rmse(true_values, pred_values)
-            metrics["r2"] = self._calculate_r2(true_values, pred_values)
-            metrics["mape"] = self._calculate_mape(true_values, pred_values)
+        logger.debug(
+            "Sample distribution by answer type",
+            extra={
+                "answer_type_counts": answer_type_counts,
+                "numeric_samples_count": len(numeric_samples),
+            },
+        )
+
+        if numeric_samples:
+            try:
+                true_values, pred_values = self._get_numeric_pairs(
+                    numeric_samples
+                )
+
+                logger.debug(
+                    "Numeric pairs extracted",
+                    extra={
+                        "true_values_count": len(true_values),
+                        "pred_values_count": len(pred_values),
+                        "true_values_sample": str(true_values[:5])
+                        if true_values
+                        else "[]",
+                        "pred_values_sample": str(pred_values[:5])
+                        if pred_values
+                        else "[]",
+                    },
+                )
+
+                # Calculate error metrics with error handling
+                try:
+                    metrics["mae"] = self._calculate_mae(
+                        true_values, pred_values
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error calculating MAE", extra={"error": str(e)}
+                    )
+                    metrics["mae"] = "N/A"
+
+                try:
+                    metrics["rmse"] = self._calculate_rmse(
+                        true_values, pred_values
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error calculating RMSE", extra={"error": str(e)}
+                    )
+                    metrics["rmse"] = "N/A"
+
+                try:
+                    metrics["r2"] = self._calculate_r2(true_values, pred_values)
+                except Exception as e:
+                    logger.error(
+                        "Error calculating R²", extra={"error": str(e)}
+                    )
+                    metrics["r2"] = "N/A"
+
+                try:
+                    metrics["mape"] = self._calculate_mape(
+                        true_values, pred_values
+                    )
+                except Exception as e:
+                    logger.error(
+                        "Error calculating MAPE", extra={"error": str(e)}
+                    )
+                    metrics["mape"] = "N/A"
+            except Exception as e:
+                logger.error(
+                    "Error processing numeric samples",
+                    extra={"error": str(e)},
+                )
+                metrics.update(
+                    {
+                        "mae": "N/A",
+                        "rmse": "N/A",
+                        "r2": "N/A",
+                        "mape": "N/A",
+                    }
+                )
+        else:
+            logger.warning(
+                "No numeric samples available for error metrics calculation",
+                extra={"processed_samples": processed_count},
+            )
+            metrics.update(
+                {
+                    "mae": "N/A",
+                    "rmse": "N/A",
+                    "r2": "N/A",
+                    "mape": "N/A",
+                }
+            )
 
         return metrics
 
@@ -473,3 +574,48 @@ class DatasetEvaluator:
 
         self._console.print(stats_table)
         self._console.print(metrics_table)
+
+    def _load_results_and_calculate_metrics(self, output_path: Path) -> None:
+        """Load existing results and calculate metrics without running LLM calls.
+
+        Args:
+            output_path: Path to the existing results file
+        """
+        logger.debug(
+            "Loading existing results file", extra={"path": str(output_path)}
+        )
+
+        try:
+            with open(output_path) as f:
+                # Parse the JSON data and reconstruct the Dataset object
+                data = json.load(f)
+
+                # Replace the current dataset with the loaded one
+                self._dataset = Dataset(**data)
+
+                # Count samples with predictions
+                samples_with_predictions = [
+                    s
+                    for s in self._dataset.samples
+                    if s.predicted_answer is not None
+                ]
+                logger.debug(
+                    "Loaded results file",
+                    extra={
+                        "total_samples": len(self._dataset.samples),
+                        "samples_with_predictions": len(
+                            samples_with_predictions
+                        ),
+                    },
+                )
+
+                # Calculate and display metrics
+                metrics = self._calculate_metrics()
+                self._display_metrics(metrics)
+
+        except Exception as e:
+            logger.error(
+                "Failed to load results file",
+                extra={"path": str(output_path), "error": str(e)},
+            )
+            raise
