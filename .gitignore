@@ -11,3 +11,6 @@ wheels/
 
 # Env files
 .envrc
+
+# Log files
+*.log
