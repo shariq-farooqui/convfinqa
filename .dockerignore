@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+dist/
+build/
+*.egg-info/
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+
+# Local development
+.pre-commit-config.yaml
+.python-version
+.envrc
+.env
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# State files
+*.state.json
+*.partial.json
+
+# Keep the evaluation results (these are deliberately not ignored)
+# evaluation_results.json
+
+# Editor files
+.vscode/
+.idea/
