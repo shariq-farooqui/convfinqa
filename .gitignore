@@ -11,3 +11,9 @@ wheels/
 
 # Env files
 .envrc
+
+# Log files
+*.log
+
+# result files
+results/*.json
