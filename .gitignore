@@ -16,4 +16,4 @@ wheels/
 *.log
 
 # result files
-./results/*.json
+results/*.json
